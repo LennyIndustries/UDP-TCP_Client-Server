@@ -1,5 +1,6 @@
 /*
  * TCP Server
+ * gcc -Wall -pedantic TCP_Server.c -l ws2_32 -o TCP_Server.exe
  * Leander Dumas
  * Lenny Industries
  */

@@ -1,5 +1,6 @@
 /*
  * UDP Client
+ * gcc -Wall -pedantic UDP_Client.c -l ws2_32 -o UDP_Client.exe
  * Leander Dumas
  * Lenny Industries
  */
@@ -12,6 +13,7 @@
 #include <unistd.h> //for close
 #include <stdlib.h> //for exit
 #include <string.h> //for memset
+#include <time.h>
 
 void OSInit(void)
 {
@@ -55,6 +57,7 @@ int main() // int argc, char * argv[]
 {
 	char packets = 0;
 	int input = 0;
+	char inputBuffer[1000] = {'\0'};
 
 	//////////////////
 	//Initialization//
@@ -70,15 +73,16 @@ int main() // int argc, char * argv[]
 	//Execution//
 	/////////////
 
-	printf("How many packets do you wan to send? (1 - 127)\n");
+	printf("How many packets do you want to send? (1 - 127)\n");
 	do
 	{
-		scanf(" %i", &input);
+		scanf(" %s", inputBuffer);
 		fflush(stdin);
+		input = atoi(inputBuffer);
 		if ((input > 0) && (input <= 127))
 		{
 			packets = (char) input;
-			printf("%u packets\n", packets);
+			printf("\n%u packets\n", packets);
 		}
 		else
 		{
@@ -149,12 +153,10 @@ int initialization(struct sockaddr **internet_address, socklen_t *internet_addre
 
 void execution(int internet_socket, struct sockaddr *internet_address, socklen_t internet_address_length, char packets)
 {
-	printf("%i\n", packets);
 	char *packetBuffer;
 	packetBuffer = malloc(sizeof(char));
 	memset(packetBuffer, '\0', sizeof(char));
 	itoa(packets, packetBuffer, 10);
-	printf("%s\n", packetBuffer);
 	//Step 2.1
 	int number_of_bytes_send = 0;
 	number_of_bytes_send = sendto(internet_socket, packetBuffer, (int) strlen(packetBuffer), 0, internet_address, internet_address_length);
@@ -165,18 +167,28 @@ void execution(int internet_socket, struct sockaddr *internet_address, socklen_t
 	free(packetBuffer);
 
 	//Step 2.2
+	char correctData = 0;
 	int number_of_bytes_received = 0;
 	char buffer[1000];
-	number_of_bytes_received = recvfrom(internet_socket, buffer, (sizeof buffer) - 1, 0, internet_address, &internet_address_length);
-	if (number_of_bytes_received == -1)
+
+	for (char i = 0; i < packets; i++)
 	{
-		perror("recvfrom");
+		number_of_bytes_received = recvfrom(internet_socket, buffer, (sizeof buffer) - 1, 0, internet_address, &internet_address_length);
+		if (number_of_bytes_received == -1)
+		{
+			perror("recvfrom");
+		}
+		else
+		{
+			buffer[number_of_bytes_received] = '\0';
+			if (strcmp(buffer, DATA) == 0)
+			{
+				correctData++;
+			}
+		}
 	}
-	else
-	{
-		buffer[number_of_bytes_received] = '\0';
-		printf("Received : %s\n", buffer);
-	}
+
+	printf("Packets received: %i / %i | %i%%", correctData, packets, (int) (((float) correctData / (float) packets) * 100));
 }
 
 void cleanup(int internet_socket, struct sockaddr *internet_address)

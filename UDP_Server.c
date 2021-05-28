@@ -1,5 +1,6 @@
 /*
  * UDP Server
+ * gcc -Wall -pedantic UDP_Server.c -l ws2_32 -o UDP_Server.exe
  * Leander Dumas
  * Lenny Industries
  */
@@ -12,6 +13,7 @@
 #include <unistd.h> //for close
 #include <stdlib.h> //for exit
 #include <string.h> //for memset
+#include <process.h> // Multithreading
 
 void OSInit(void)
 {
@@ -45,6 +47,10 @@ int OSInit( void ) {}
 int OSCleanup( void ) {}
 #endif
 
+#define DATA "Test Data String"
+#define ARTIFICIAL_FAIL 0
+
+void serverCommands(void);
 int initialization();
 void execution(int internet_socket);
 void cleanup(int internet_socket);
@@ -63,8 +69,22 @@ int main() // int argc, char * argv[]
 	//Execution//
 	/////////////
 
-	execution(internet_socket);
+	char *looping = NULL;
+	looping = malloc(sizeof(char));
+	memset(looping, 0, sizeof(char));
 
+	looping[0] = 1;
+
+//	DWORD threadId;
+//	HANDLE threadHandle;
+//	int param = 0;
+//
+//	threadHandle = CreateThread(NULL, 0, serverCommands, &param, 0, &threadId);
+
+	while (looping)
+	{
+		execution(internet_socket);
+	}
 
 	////////////
 	//Clean up//
@@ -75,6 +95,13 @@ int main() // int argc, char * argv[]
 	OSCleanup();
 
 	return 0;
+}
+
+void serverCommands(void)
+{
+	char buffer[1000] = {'\0'};
+	printf("Command: ");
+	scanf("%s", buffer);
 }
 
 int initialization()
@@ -133,6 +160,7 @@ int initialization()
 
 void execution(int internet_socket)
 {
+	char timesToSend = 0;
 	//Step 2.1
 	int number_of_bytes_received = 0;
 	char buffer[1000];
@@ -149,12 +177,19 @@ void execution(int internet_socket)
 		printf("Received : %s\n", buffer);
 	}
 
+	timesToSend = atoi(buffer);
+	#ifdef ARTIFICIAL_FAIL
+		timesToSend -= ARTIFICIAL_FAIL;
+	#endif
 	//Step 2.2
 	int number_of_bytes_send = 0;
-	number_of_bytes_send = sendto(internet_socket, "Hello UDP world!", 16, 0, (struct sockaddr *) &client_internet_address, client_internet_address_length);
-	if (number_of_bytes_send == -1)
+	for (char i = 0; i < timesToSend; i++)
 	{
-		perror("sendto");
+		number_of_bytes_send = sendto(internet_socket, DATA, strlen(DATA), 0, (struct sockaddr *) &client_internet_address, client_internet_address_length);
+		if (number_of_bytes_send == -1)
+		{
+			perror("sendto");
+		}
 	}
 }
 
