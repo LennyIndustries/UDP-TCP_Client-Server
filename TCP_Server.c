@@ -79,6 +79,8 @@ int main() // int argc, char * argv[]
 	strcpy(head->nick, "Dummy"); // Copying "Dummy" to dummy nick
 	head->next = NULL; // Setting dummy next to NULL
 
+	pid_t cPid = -1;
+
 	//////////////////
 	//Initialization//
 	//////////////////
@@ -92,15 +94,41 @@ int main() // int argc, char * argv[]
 	//Connection//
 	//////////////
 
-	fprintf(stdout, "Connection\n");
-	int client_internet_socket = connection(internet_socket);
+	int newSocket = 0;
+	struct sockaddr_in newAddr;
+	socklen_t addr_size;
+	while (1)
+	{
+		newSocket = accept(internet_socket, (struct sockaddr *) &newAddr, &addr_size);
+		if (newSocket < 0)
+		{
+			break;
+		}
 
-	/////////////
-	//Execution//
-	/////////////
+		fprintf(stdout, "Connection from: %s:%i", inet_ntoa(newAddr.sin_addr), ntohs(newAddr.sin_port));
 
-	fprintf(stdout, "Execution\n");
-	while (1) { execution(client_internet_socket, head); }
+		if ((cPid = fork()) == 0)
+		{
+			close(internet_socket);
+			while (1)
+			{
+				execution(internet_socket, head);
+			}
+		}
+	}
+
+//	fprintf(stdout, "Connection\n");
+//	int client_internet_socket = connection(internet_socket);
+//
+//	/////////////
+//	//Execution//
+//	/////////////
+//
+//	fprintf(stdout, "Execution\n");
+//	while (1)
+//	{
+//		execution(client_internet_socket, head);
+//	}
 
 	free(head);
 
@@ -109,7 +137,7 @@ int main() // int argc, char * argv[]
 	////////////
 
 	fprintf(stdout, "Clean up\n");
-	cleanup(internet_socket, client_internet_socket);
+	cleanup(internet_socket, newSocket);
 
 	OSCleanup();
 
@@ -242,7 +270,7 @@ void execution(int internet_socket, User *head)
 		// Remove user
 		removeUser(internet_socket, head);
 		// Send ack
-		number_of_bytes_send = send(internet_socket, "ok", 2, 0);
+		number_of_bytes_send = send(internet_socket, "okD", 3, 0);
 	}
 	else if (strcmp(cmdBuffer, "message") == 0)
 	{
@@ -251,21 +279,21 @@ void execution(int internet_socket, User *head)
 		// Send ack
 		number_of_bytes_send = send(internet_socket, "ok", 2, 0);
 	}
-	else if (strcmp(cmdBuffer, "shutdown") == 0)
-	{
-		// Shutting down server
-		fprintf(stdout, "Shutting down\n");
-		// send shutdown message to users
-		// Send ack
-		number_of_bytes_send = send(internet_socket, "ok", 2, 0);
-	}
+//	else if (strcmp(cmdBuffer, "shutdown") == 0)
+//	{
+//		// Shutting down server
+//		fprintf(stdout, "Shutting down\n");
+//		// send shutdown message to users
+//		// Send ack
+//		number_of_bytes_send = send(internet_socket, "ok", 2, 0);
+//	}
 	else if (strcmp(cmdBuffer, "users") == 0)
 	{
 		// Dumping users
 		fprintf(stdout, "Dumping users\n");
 		dumpUsers(head);
 		// Send ack
-		number_of_bytes_send = send(internet_socket, "ok", 2, 0);
+//		number_of_bytes_send = send(internet_socket, "ok", 2, 0);
 	}
 	else // No known command
 	{
@@ -333,6 +361,7 @@ void removeUser(int socket, User *head)
 	}
 
 	liLog(1, __FILE__, __LINE__, 1, "Removing %s.", pointer->nick);
+	fprintf(stdout, "%s disconnected\n", pointer->nick);
 	prev->next = pointer->next;
 	free(pointer);
 }
@@ -362,7 +391,7 @@ void sendMessage(char *message, int socketSender, User *head)
 		// Send message to user
 		if ((pointer->user_socket != -1) && (pointer->user_socket != socketSender))
 		{
-			fprintf(stdout, "Sending %s to: %s", messageBuffer, pointer->nick);
+//			fprintf(stdout, "Sending %s to: %s\n", messageBuffer, pointer->nick);
 			number_of_bytes_send = send(pointer->user_socket, messageBuffer, (int) strlen(messageBuffer), 0);
 			if (number_of_bytes_send == -1)
 			{
@@ -407,11 +436,18 @@ void dumpUsers(User *head)
 {
 	User *pointer = NULL;
 	pointer = head;
+	char textBuffer[50];
 	do
 	{
 		fprintf(stdout, "User: %s connected on socket: %i\n", pointer->nick, pointer->user_socket);
+		memset(textBuffer, '\0', 50);
+		snprintf(textBuffer, 50, "User: %s connected on socket: %i", pointer->nick, pointer->user_socket);
+		sendMessage(textBuffer, -1, head);
 		pointer = pointer->next;
 	} while (pointer->next != NULL);
 
+	memset(textBuffer, '\0', 50);
+	snprintf(textBuffer, 50, "User: %s connected on socket: %i", pointer->nick, pointer->user_socket);
+	sendMessage(textBuffer, -1, head);
 	fprintf(stdout, "User: %s connected on socket: %i\n", pointer->nick, pointer->user_socket);
 }
