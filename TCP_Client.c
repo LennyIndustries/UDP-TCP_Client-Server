@@ -1,6 +1,8 @@
 /*
  * TCP Client
- * gcc -Wall -pedantic TCP_Client.c -l ws2_32 -o TCP_Client.exe
+ * gcc -Wall -pedantic -c lilog.c -o lilog.o
+ * gcc -Wall -pedantic -c lilib.c -o lilib.o
+ * gcc -Wall -pedantic TCP_Client.c lilib.o lilog.o -l ws2_32 -o TCP_Client.exe
  * Leander Dumas
  * Lenny Industries
  */
@@ -46,16 +48,23 @@ int OSInit( void ) {}
 int OSCleanup( void ) {}
 #endif
 
+#include "lilib.h"
+
 int initialization();
 void execution(int internet_socket);
 void cleanup(int internet_socket);
 
+void requestConnect(int internet_socket);
+
 int main() // int argc, char *argv[]
 {
+	liLog(1, __FILE__, __LINE__, 0, "Starting program, clearing log.");
+	fprintf(stdout, "Welcome %s to LICS:\nLenny Industries Chat Service.\n\n", getenv("USERNAME"));
 	//////////////////
 	//Initialization//
 	//////////////////
 
+	liLog(1, __FILE__, __LINE__, 1, "Initialization");
 	OSInit();
 
 	int internet_socket = initialization();
@@ -64,6 +73,7 @@ int main() // int argc, char *argv[]
 	//Execution//
 	/////////////
 
+	liLog(1, __FILE__, __LINE__, 1, "Execution");
 	execution(internet_socket);
 
 
@@ -71,6 +81,7 @@ int main() // int argc, char *argv[]
 	//Clean up//
 	////////////
 
+	liLog(1, __FILE__, __LINE__, 1, "Clean up");
 	cleanup(internet_socket);
 
 	OSCleanup();
@@ -86,7 +97,11 @@ int initialization()
 	memset(&internet_address_setup, 0, sizeof internet_address_setup);
 	internet_address_setup.ai_family = AF_UNSPEC;
 	internet_address_setup.ai_socktype = SOCK_STREAM;
-	int getaddrinfo_return = getaddrinfo("::1", "24042", &internet_address_setup, &internet_address_result);
+	char ip[1000] = {'\0'};
+	fprintf(stdout, "Enter the server IPv4: ");
+	scanf(" %s", ip); // Request target ip (if it is wrong it will throw an error later, if it does not go to a replying server, it will timeout later)
+	fflush(stdin);
+	int getaddrinfo_return = getaddrinfo(ip, "25042", &internet_address_setup, &internet_address_result);
 	if (getaddrinfo_return != 0)
 	{
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(getaddrinfo_return));
@@ -133,15 +148,8 @@ int initialization()
 
 void execution(int internet_socket)
 {
-	//Step 2.1
-	int number_of_bytes_send = 0;
-	number_of_bytes_send = send(internet_socket, "Hello TCP world!", 16, 0);
-	if (number_of_bytes_send == -1)
-	{
-		perror("send");
-	}
+	requestConnect(internet_socket);
 
-	//Step 2.2
 	int number_of_bytes_received = 0;
 	char buffer[1000];
 	number_of_bytes_received = recv(internet_socket, buffer, (sizeof buffer) - 1, 0);
@@ -152,8 +160,101 @@ void execution(int internet_socket)
 	else
 	{
 		buffer[number_of_bytes_received] = '\0';
-		printf("Received : %s\n", buffer);
+		liLog(1, __FILE__, __LINE__, 1, "Received: %s", buffer);
 	}
+
+	if (strcmp(buffer, "ok") == 0)
+	{
+		fprintf(stdout, "Connected\n\n");
+	}
+	else
+	{
+		fprintf(stdout, "An error occurred.\nTerminating program.\n");
+		return;
+	}
+
+	int number_of_bytes_send = 0;
+	char messageBuffer[1009];
+	do
+	{
+		memset(buffer, '\0', 1000);
+		memset(messageBuffer, '\0', 1009);
+		fprintf(stdout, "Message: ");
+
+		if (fgets(buffer, sizeof(buffer), stdin) == NULL)
+		{
+			fprintf(stderr, "Error in fgets()\n");
+			liLog(3, __FILE__, __LINE__, 1, "Error in fgets()");
+			exit(EXIT_FAILURE);
+		}
+
+		fflush(stdin);
+
+		buffer[strlen(buffer) - 1] = '\0'; // The last character is \n
+
+		if ((strcmp(buffer, "/disconnect") != 0) && (strcmp(buffer, "/shutdown") != 0) && (strcmp(buffer, "/users") != 0))
+		{
+			strcpy(messageBuffer, "!message:");
+			strcpy(messageBuffer + 9, buffer);
+
+			number_of_bytes_send = send(internet_socket, messageBuffer, (int) strlen(messageBuffer), 0);
+			if (number_of_bytes_send == -1)
+			{
+				perror("send");
+			}
+		}
+		else
+		{
+			if (strcmp(buffer, "/disconnect") == 0)
+			{
+				memset(messageBuffer, '\0', 1000);
+				strcpy(messageBuffer, "!disconnect:");
+			}
+			else if (strcmp(buffer, "/shutdown") == 0)
+			{
+				memset(messageBuffer, '\0', 1000);
+				strcpy(messageBuffer, "!shutdown:");
+			}
+			else if (strcmp(buffer, "/users") == 0)
+			{
+				memset(messageBuffer, '\0', 1000);
+				strcpy(messageBuffer, "!users:");
+			}
+			else
+			{
+				fprintf(stdout, "Unknown error!\n");
+				return;
+			}
+
+			number_of_bytes_send = send(internet_socket, messageBuffer, (int) strlen(messageBuffer), 0);
+			if (number_of_bytes_send == -1)
+			{
+				perror("send");
+			}
+		}
+
+		if ((strcmp(buffer, "/shutdown") == 0) || (strcmp(buffer, "/disconnect") == 0))
+		{
+			break;
+		}
+
+		memset(buffer, '\0', 1000);
+
+		number_of_bytes_received = recv(internet_socket, buffer, (sizeof buffer) - 1, 0);
+		if (number_of_bytes_received == -1)
+		{
+			perror("recv");
+		}
+		else
+		{
+			buffer[number_of_bytes_received] = '\0';
+			liLog(1, __FILE__, __LINE__, 1, "Received: %s", buffer);
+			if (strcmp(buffer, "ok") != 0)
+			{
+				fprintf(stdout, "%s\n", buffer);
+			}
+		}
+	} while (1);
 }
 
 void cleanup(int internet_socket)
@@ -167,4 +268,53 @@ void cleanup(int internet_socket)
 
 	//Step 3.1
 	close(internet_socket);
+}
+
+void requestConnect(int internet_socket) // https://stackoverflow.com/questions/42265038/how-to-check-if-user-enters-blank-line-in-scanf-in-c
+{
+	char buffer[1000] = {'\0'};
+	char *nick = NULL;
+
+	do
+	{
+		printf("Nickname (max 25 or blank) : ");
+
+		if (fgets(buffer, sizeof(buffer), stdin) == NULL)
+		{
+			fprintf(stderr, "Error in fgets()\n");
+			liLog(3, __FILE__, __LINE__, 1, "Error in fgets()");
+			exit(EXIT_FAILURE);
+		}
+
+		fflush(stdin);
+
+		if (strlen(buffer) > 25)
+		{
+			fprintf(stdout, "Too long!\n");
+			memset(buffer, '\0', 1000);
+		}
+		else if (buffer[0] == '\n')
+		{
+			subString(getenv("USERNAME"), buffer, 0, 24); // getenv("USERNAME") // "Test_Data_123456789_123456789_123"
+		}
+		else
+		{
+			buffer[strlen(buffer) - 1] = '\0'; // The last character is \n
+		}
+	} while (buffer[0] == '\0');
+
+	nick = (char *) malloc(strlen(buffer) + 9 + 1);
+	memset(nick, '\0', strlen(buffer) + 9 + 1);
+	strcpy(nick, "!connect:");
+	strcpy(nick + 9, buffer);
+
+	liLog(1, __FILE__, __LINE__, 1, "Sending command to server: %s", nick);
+	int number_of_bytes_send = 0;
+	number_of_bytes_send = send(internet_socket, nick, (int) strlen(nick), 0);
+	if (number_of_bytes_send == -1)
+	{
+		perror("send");
+	}
+
+	free(nick);
 }
