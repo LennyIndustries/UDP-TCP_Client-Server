@@ -154,29 +154,6 @@ void execution(int internet_socket)
 {
 	requestConnect(internet_socket);
 
-	int number_of_bytes_received = 0;
-	char buffer[1000];
-	number_of_bytes_received = recv(internet_socket, buffer, (sizeof buffer) - 1, 0);
-	if (number_of_bytes_received == -1)
-	{
-		perror("recv");
-	}
-	else
-	{
-		buffer[number_of_bytes_received] = '\0';
-		liLog(1, __FILE__, __LINE__, 1, "Received: %s", buffer);
-	}
-
-	if (strcmp(buffer, "ok") == 0)
-	{
-		fprintf(stdout, "Connected\n\n");
-	}
-	else
-	{
-		fprintf(stdout, "An error occurred.\nTerminating program.\n");
-		return;
-	}
-
 	pthread_t tidSend;
 	pthread_t tidReceive;
 
@@ -224,7 +201,7 @@ void requestConnect(int internet_socket) // https://stackoverflow.com/questions/
 		}
 		else if (buffer[0] == '\n')
 		{
-			subString(getenv("USERNAME"), buffer, 0, 24); // getenv("USERNAME") // "Test_Data_123456789_123456789_123"
+			subString(getenv("USERNAME"), buffer, 0, 24);
 		}
 		else
 		{
@@ -251,7 +228,6 @@ void requestConnect(int internet_socket) // https://stackoverflow.com/questions/
 void *sendMessage(void *socket)
 {
 	int internet_socket = *((int *) socket);
-//	fprintf(stdout, "Socket: %i\n", internet_socket);
 	int number_of_bytes_send = 0;
 	char buffer[1000];
 	char messageBuffer[1009];
@@ -259,7 +235,6 @@ void *sendMessage(void *socket)
 	{
 		memset(buffer, '\0', 1000);
 		memset(messageBuffer, '\0', 1009);
-//		fprintf(stdout, "Message: ");
 
 		if (fgets(buffer, sizeof(buffer), stdin) == NULL)
 		{
@@ -272,11 +247,10 @@ void *sendMessage(void *socket)
 
 		buffer[strlen(buffer) - 1] = '\0'; // The last character is \n
 
-		if ((strcmp(buffer, "/disconnect") != 0) && (strcmp(buffer, "/users") != 0)) // && (strcmp(buffer, "/shutdown") != 0) TBD
+		if ((strcmp(buffer, "/disconnect") != 0) && (strcmp(buffer, "/users") != 0))
 		{
 			strcpy(messageBuffer, "!message:");
 			strcpy(messageBuffer + 9, buffer);
-//			fprintf(stdout, "Sending %s\n", messageBuffer);
 			number_of_bytes_send = send(internet_socket, messageBuffer, (int) strlen(messageBuffer), 0);
 			if (number_of_bytes_send == -1)
 			{
@@ -289,11 +263,6 @@ void *sendMessage(void *socket)
 			{
 				memset(messageBuffer, '\0', 1000);
 				strcpy(messageBuffer, "!disconnect:");
-			}
-			else if (strcmp(buffer, "/shutdown") == 0)
-			{
-				memset(messageBuffer, '\0', 1000);
-				strcpy(messageBuffer, "!shutdown:");
 			}
 			else if (strcmp(buffer, "/users") == 0)
 			{
@@ -313,7 +282,7 @@ void *sendMessage(void *socket)
 			}
 		}
 
-		if ((strcmp(buffer, "/disconnect") == 0)) // (strcmp(buffer, "/shutdown") == 0) || TBD
+		if ((strcmp(buffer, "/disconnect") == 0))
 		{
 			break;
 		}
@@ -326,10 +295,10 @@ void *receiveMessage(void *socket)
 {
 	int internet_socket = *((int *) socket);
 	int number_of_bytes_received = 0;
-	char buffer[1000];
+	char buffer[1027]; // Message max = 1000, name max is 25, + ": "
 	do
 	{
-		memset(buffer, '\0', 1000);
+		memset(buffer, '\0', 1027);
 
 		number_of_bytes_received = recv(internet_socket, buffer, (sizeof buffer) - 1, 0);
 		if (number_of_bytes_received == -1)
@@ -340,12 +309,13 @@ void *receiveMessage(void *socket)
 		{
 			buffer[number_of_bytes_received] = '\0';
 			liLog(1, __FILE__, __LINE__, 1, "Received: %s", buffer);
-			if ((strcmp(buffer, "ok") != 0) && (strcmp(buffer, "okD") != 0))
+			if ((strcmp(buffer, "disconnect_ok") != 0) && (strcmp(buffer, "") != 0))
 			{
 				fprintf(stdout, "%s\n", buffer);
 			}
-			else if (strcmp(buffer, "okD") == 0)
+			else
 			{
+				fprintf(stdout, "Disconnected\n");
 				break;
 			}
 		}
